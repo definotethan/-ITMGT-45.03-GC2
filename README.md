@@ -87,7 +87,7 @@ Stripe testing notes (server-confirmed): uses Stripe test payment methods (e.g.,
 ## Before/after performance screenshots
 Add images to /docs and reference them here (or paste images directly in your README if preferred).
 - Before: https://drive.google.com/drive/folders/1CAR_WlK9PrSM24jyCFWaaUtf6rurTv4U?usp=sharing 
-- After:  
+- After: https://drive.google.com/drive/folders/1sKjsTPZwcjh7oPlcTxsgcXWvqQPOyOlx?usp=sharing
 Optimizations included: lazy-loaded images for product cards, route-level code splitting for Orders, simplified DOM structure, consistent card styling.
 
 ***
