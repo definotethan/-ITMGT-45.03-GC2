@@ -85,10 +85,16 @@ Stripe testing notes (server-confirmed): uses Stripe test payment methods (e.g.,
 ***
 
 ## Before/after performance screenshots
-Add images to /docs and reference them here (or paste images directly in your README if preferred).
 - Before: https://drive.google.com/drive/folders/1CAR_WlK9PrSM24jyCFWaaUtf6rurTv4U?usp=sharing 
 - After: https://drive.google.com/drive/folders/1sKjsTPZwcjh7oPlcTxsgcXWvqQPOyOlx?usp=sharing
-Optimizations included: lazy-loaded images for product cards, route-level code splitting for Orders, simplified DOM structure, consistent card styling.
+
+Optimizations included
+- Lazy images: product card images use loading="lazy" to defer off‑screen images, reducing initial bytes and speeding up first render
+- Route code‑splitting: Orders page is loaded with React.lazy + Suspense so it doesn’t block the home page bundle
+- CSS cleanup: unified global.css (cards, containers, spacing) to cut redundant styles and reduce layout shifts
+- Simpler DOM: flattened markup and consistent card components to lower layout/paint cost
+- Server-driven totals: pricing/ship/tax calculated once on the server to remove duplicate client work and avoid re-renders from mismatched math
+- Caching leverage (host defaults): static frontend served by Vercel with immutable asset filenames from Vite build, improving repeat‑visit
 
 ***
 
@@ -100,6 +106,3 @@ Optimizations included: lazy-loaded images for product cards, route-level code s
 - Customization “file” isn’t uploaded to cloud storage (filename only stored in UI).  
 - Secrets (.env) must never be committed. If a secret was pushed, the repo history must be scrubbed before pushing again.  
 - Error handling is basic; retries/timeouts for external services are minimal.
-[7](https://stackoverflow.com/questions/61732486/github-link-only-deploying-to-the-readme)
-[8](https://dev.to/zand/a-comprehensive-and-user-friendly-project-readmemd-template-2ei8)
-[9](https://www.docuwriter.ai/posts/readme-generator)
