@@ -1,87 +1,105 @@
-# CustomKeeps – GC2
+# CustomKeeps (GC2)
 
 ## Tech stack & versions
-- Frontend: React 19.x, React Router 7.x, Vite 5.x, Vanilla CSS (global.css)  
-- Backend: Node.js ≥18 (tested on v24.11.0), Express 4.x, Mongoose 8.x, Stripe SDK 16.x  
+- Frontend: React 19.x, React Router 7.x, Vite 5.x, Vanilla CSS  
+- Backend: Node.js (tested on v24.11.0+), Express 4.x, Mongoose 8.x, Stripe SDK 16.x  
 - Database: MongoDB Atlas (Free tier)  
-- Deployment targets (recommended):  
-  - Frontend: Vercel or Netlify (Free)  
-  - Backend: Render or Railway (Free)  
+- Hosting:  
+  - Frontend: Vercel (Free) — https://itmgt4503-gc2.vercel.app/  
+  - Backend: Render (Free) — https://itmgt-45-03-gc2.onrender.com
+
+***
 
 ## Setup instructions
+
 1) Clone and install  
-- git clone <repo-url>  
+- git clone (https://github.com/definotethan/-ITMGT-45.03-GC2)  
 - cd customkeeps-frontend && npm install  
-- cd ../customkeeps-backend && npm install  
+- cd ../customkeeps-backend && npm install
 
 2) Environment variables (do NOT commit .env)  
 - customkeeps-backend/.env  
   - MONGODB_URI=mongodb+srv://gc2:gc2@gc2.xlphaiy.mongodb.net/customkeeps?retryWrites=true&w=majority&appName=GC2
-  - STRIPE_SECRET_KEY=sk_test_51SOsreREYpg1B8S2BgIrFlBT8pZPDFUXJXyqXm8lfiB2ol5R50pKaLaDxn5RRkLWDfHrQsdvLC5mdXH4HKa2FrBY00EvSJbzRu
+  - STRIPE_SECRET_KEY=sk_test_51SOsreREYpg1B8S2BgIrFlBT8pZPDFUXJXyqXm8lfiB2ol5R50pKaLaDxn5RRkLWDfHrQsdvLC5mdXH4HKa2FrBY00EvSJbzRu 
   - CURRENCY=php  
   - PORT=3000  
 - customkeeps-frontend/.env  
-  - VITE_API_URL=http://localhost:3000
+  - VITE_API_URL=https://itmgt-45-03-gc2.onrender.com
 
 3) Seed the database (from backend folder)  
 - node seed.js
 
 4) Run locally  
-- Backend (from customkeeps-backend): node server.js  
-- Frontend (from customkeeps-frontend): npm run dev (opens on http://localhost:5173)
+- Backend: node server.js (http://localhost:3000/health should show ok:true)  
+- Frontend: npm run dev (http://localhost:5173)
 
 5) Basic verification  
-- Visit http://localhost:3000/health (should return ok:true)  
-- Visit http://localhost:3000/api/products (should return seeded products)  
-- Open http://localhost:5173 and complete a test checkout (Stripe test mode)
+- Visit http://localhost:3000/api/products (should list items)  
+- Open the app, add to cart, see server quote, submit payment (Stripe test mode), and check Orders page.
+
+***
 
 ## API documentation & links
-Base URL: BACKEND_URL (e.g., http://localhost:3000 or your deployed API)
+
+Base URL (prod): https://itmgt-45-03-gc2.onrender.com  
+Base URL (local): http://localhost:3000
 
 - GET /health  
-  - Response: { "ok": true, "time": "<ISO>" }
+  - Returns service liveness: { ok: true, time: "<ISO>" }
 
 - GET /api/products  
-  - Returns catalog array.  
-  - Example item: { "_id":"...", "sku":"...", "name":"...", "basePrice":399, "description":"...", "imageUrl":"..." }
+  - Lists products from MongoDB.  
+  - Example (prod): https://itmgt-45-03-gc2.onrender.com/api/products
 
 - GET /api/products/:id  
-  - Returns a single product by MongoDB _id.
+  - Fetch a single product by _id.
 
 - POST /api/pricing/quote  
   - Body: { "items":[{ "productId":"<id>", "quantity":1 }...] }  
   - Response:  
-    - { "lines":[{ "productId":"...", "name":"...", "qty":1, "unitPrice":399, "lineTotal":399 }...],  
-      "summary": { "subtotal":399, "shipping":99|149, "tax":0, "total":498 } }
+    - lines: [{ productId, name, qty, unitPrice, lineTotal }...]  
+    - summary: { subtotal, shipping, tax, total }
 
 - POST /api/checkout/pay  
   - Body: {  
     "items":[{ "productId":"<id>", "quantity":1 }...],  
-    "customer":{ "fullName":"...", "address":"...", "city":"...", "postalCode":"...", "country":"..." },  
+    "customer":{ "fullName","address","city","postalCode","country" },  
     "testScenario":"success" | "decline"  
   }  
-  - Behavior: Server recomputes totals, confirms a Stripe PaymentIntent (test mode), persists an Order.  
-  - Response (success): { "status":"succeeded", "id":"pi_...", "amount":49800, "currency":"php", "orderId":"<mongo-id>" }  
-  - Response (error): { "error":"<message>" }
+  - Behavior: Recomputes totals, confirms Stripe PaymentIntent (test mode), persists Order.  
+  - Success: { status, id, amount, currency, orderId }  
+  - Error: { error }
 
 - GET /api/orders  
-  - Returns the latest 20 persisted orders with lines, summary, and payment metadata.
+  - Lists latest 20 orders with lines, summary, and payment metadata.  
+  - Example (prod): https://itmgt-45-03-gc2.onrender.com/api/orders
+
+Stripe testing notes (server-confirmed): uses Stripe test payment methods (e.g., pm_card_visa) on the server, so no real card entry is required in the UI.
+
+***
 
 ## Deployment link
-- Frontend (Vercel/Netlify): https://YOUR-FRONTEND.example.com  
-- Backend (Render/Railway): https://YOUR-BACKEND.example.com
+- Frontend (Vercel): https://itmgt4503-gc2.vercel.app/  
+- Backend (Render): https://itmgt-45-03-gc2.onrender.com
+
+***
 
 ## Before/after performance screenshots
-- Place the images in /docs and reference here:  
-  - Before (Lighthouse): ./docs/lighthouse-before.png  
-  - After (Lighthouse): ./docs/lighthouse-after.png  
-- Notes on changes: lazy-loaded images, route-level code splitting for Orders, reduced DOM depth, consistent card styles.
+Add images to /docs and reference them here (or paste images directly in your README if preferred).
+- Before: https://drive.google.com/drive/folders/1CAR_WlK9PrSM24jyCFWaaUtf6rurTv4U?usp=sharing 
+- After:  
+Optimizations included: lazy-loaded images for product cards, route-level code splitting for Orders, simplified DOM structure, consistent card styling.
+
+***
 
 ## Known issues & limitations
-- Payments run only in Stripe test mode; no live payments configured.  
-- Shipping uses a simple flat/tier rule (not carrier-rated); taxes are 0 for GC2 scope.  
-- No authentication/authorization; Orders endpoint shows all recent orders.  
-- Customization “file” is not persisted to cloud storage—UI stores filename only.  
-- Secrets must never be committed (.env); if a secret was pushed, history must be scrubbed before pushing again.  
-- Error handling is basic; transient network and rate-limit retries are not yet implemented.  
-- Accessibility and i18n are minimal; further improvements recommended for production.
+- Payments run in Stripe test mode only (no live charges).  
+- Shipping is a simple flat/tier rule; no real carrier quotes yet.  
+- Taxes are set to 0 for GC2 scope.  
+- No authentication/authorization; Orders endpoint shows recent orders.  
+- Customization “file” isn’t uploaded to cloud storage (filename only stored in UI).  
+- Secrets (.env) must never be committed. If a secret was pushed, the repo history must be scrubbed before pushing again.  
+- Error handling is basic; retries/timeouts for external services are minimal.
+[7](https://stackoverflow.com/questions/61732486/github-link-only-deploying-to-the-readme)
+[8](https://dev.to/zand/a-comprehensive-and-user-friendly-project-readmemd-template-2ei8)
+[9](https://www.docuwriter.ai/posts/readme-generator)
