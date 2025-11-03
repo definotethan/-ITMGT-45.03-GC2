@@ -1,0 +1,19 @@
+// models/Product.js
+const mongoose = require('mongoose');
+
+const ProductSchema = new mongoose.Schema(
+  {
+    sku: { type: String, required: true, unique: true },
+    name: { type: String, required: true },
+    basePrice: { type: Number, required: true },     // backend canonical unit price
+    description: { type: String, default: '' },
+    imageUrl: { type: String, default: '' },         // used by the frontend as image_url
+    customizationFields: {
+      text: { type: Boolean, default: true },
+      image: { type: Boolean, default: true },
+    },
+  },
+  { timestamps: true }
+);
+
+module.exports = mongoose.model('Product', ProductSchema);

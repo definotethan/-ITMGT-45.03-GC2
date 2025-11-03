@@ -1,0 +1,155 @@
+/* src/global.css */
+
+:root {
+  --brand: #0e3b2d;
+  --brand-ink: #12352a;
+  --ink: #1f2937;
+  --muted: #6b7280;
+  --bg: #f7f8f9;
+  --card: #ffffff;
+  --ring: #d1d5db;
+  --accent: #10b981;
+}
+
+* { box-sizing: border-box; }
+
+html, body, #root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+  color: var(--ink);
+  background: var(--bg);
+}
+
+/* Header */
+.site-header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: var(--brand);
+  color: #fff;
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  padding: 12px 16px;
+}
+
+.site-header a {
+  color: #d1fae5;
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.site-header a:hover {
+  color: #fff;
+}
+
+/* Page container */
+.container {
+  max-width: 1100px;
+  margin: 24px auto;
+  padding: 0 16px;
+}
+
+/* Section headings */
+.h1 {
+  font-size: 28px;
+  font-weight: 800;
+  text-align: center;
+  margin: 8px 0 24px;
+}
+
+.h2 {
+  font-size: 20px;
+  font-weight: 700;
+  margin: 8px 0 12px;
+}
+
+/* Product grid */
+.grid {
+  display: grid;
+  gap: 16px;
+}
+
+@media (min-width: 640px) {
+  .grid.cols-3 {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+/* Card */
+.card {
+  background: var(--card);
+  border: 1px solid var(--ring);
+  border-radius: 10px;
+  padding: 12px;
+  box-shadow: 0 1px 0 rgba(0,0,0,0.02);
+}
+
+.card:hover {
+  box-shadow: 0 6px 18px rgba(0,0,0,0.05);
+  transform: translateY(-1px);
+  transition: box-shadow 160ms ease, transform 160ms ease;
+}
+
+.card img {
+  width: 100%;
+  height: 160px;
+  object-fit: cover;
+  border-radius: 8px;
+  margin-bottom: 8px;
+}
+
+/* Muted text */
+.muted { color: var(--muted); }
+
+/* Buttons */
+.btn {
+  appearance: none;
+  border: 1px solid var(--brand);
+  background: var(--brand);
+  color: #fff;
+  padding: 10px 14px;
+  font-weight: 700;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.btn.secondary {
+  background: transparent;
+  color: var(--brand-ink);
+  border: 1px solid var(--ring);
+}
+
+.btn:disabled { opacity: 0.6; cursor: not-allowed; }
+
+/* Inputs */
+input, select {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--ring);
+  border-radius: 8px;
+}
+
+/* Stacks */
+.stack { display: grid; gap: 12px; }
+.stack-md { display: grid; gap: 16px; }
+.stack-lg { display: grid; gap: 20px; }
+
+/* Rows */
+.row { display: flex; gap: 12px; align-items: center; }
+
+/* Totals */
+.totals {
+  display: grid;
+  gap: 6px;
+  background: var(--card);
+  border: 1px solid var(--ring);
+  border-radius: 10px;
+  padding: 12px;
+}
+
+.total-strong { font-weight: 800; }
