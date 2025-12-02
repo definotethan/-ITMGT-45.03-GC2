@@ -16,7 +16,7 @@ Built with Django REST Framework, React 19, Vite, and Stripe. A fully-functional
 - **PostgreSQL**: 15 (production); SQLite 3 (development)
 - **Stripe**: 14.0.1 (PaymentIntent API, currency: PHP)
 - **django-cors-headers**: 4.9.0 (Cross-Origin Resource Sharing)
-- **django-admin-interface**: 0.31.0 (Enhanced Django admin UI)
+- **django-admin-interface**: 0.31.0 (Enhanced Django admin UI with image previews)
 - **Gunicorn**: 23.0.0 (WSGI application server)
 - **WhiteNoise**: 6.11.0 (Static file serving with compression)
 - **python-dotenv**: 1.2.1 (Environment configuration)
@@ -28,11 +28,11 @@ Built with Django REST Framework, React 19, Vite, and Stripe. A fully-functional
 
 - **React**: 19.2.0 (with Vite fast refresh)
 - **React Router DOM**: 7.9.6 (Client-side routing)
-- **Vite**: 7.2.4 (Ultra-fast build tool)
+- **Vite**: 7.2.4 (Ultra-fast build tool with SWC)
 - **Stripe.js**: 8.5.2 (@stripe/stripe-js)
 - **Stripe React**: 5.4.0 (@stripe/react-stripe-js, Elements integration)
 - **react-hook-form**: 7.66.1 (Lightweight form validation)
-- **Axios**: 1.13.2 (HTTP client, optional—native fetch used instead)
+- **Axios**: 1.13.2 (HTTP client, optional—native fetch used in production code)
 
 ### Deployment & Hosting
 
@@ -143,6 +143,7 @@ Built with Django REST Framework, React 19, Vite, and Stripe. A fully-functional
    - Framework: Vite
    - Build command: `npm run build`
    - Output directory: `dist`
+   - Install command: `npm install`
 
 3. **Set environment variables:**
    - `VITE_API_URL=https://customkeeps-api.onrender.com`
@@ -154,7 +155,7 @@ Built with Django REST Framework, React 19, Vite, and Stripe. A fully-functional
 
 ## API Documentation
 
-All endpoints prefixed with `/api/`. Authentication required unless noted.
+All endpoints prefixed with `/api/`. Authentication required (Bearer JWT token) unless noted.
 
 ### Authentication Endpoints
 
@@ -162,33 +163,35 @@ All endpoints prefixed with `/api/`. Authentication required unless noted.
 - **Auth**: Not required
 - **Body**: `{ "username": "string", "email": "string", "password": "string" }`
 - **Response**: `{ "username": "...", "email": "..." }`
-- **Purpose**: Register new user (creates Django User in admin)
+- **Purpose**: Register new user; creates Django auth User with hashed password
 
 **POST `/api/token/`**
 - **Auth**: Not required
 - **Body**: `{ "username": "string", "password": "string" }`
 - **Response**: `{ "access": "jwt_token", "refresh": "jwt_token" }`
-- **Purpose**: Login; returns access token (expires 1 day) and refresh token (expires 7 days)
+- **Purpose**: Login; returns access token (expires 24 hours) and refresh token (expires 7 days)
+- **Note**: Frontend stores tokens in `localStorage`; does NOT implement automatic refresh
 
 **POST `/api/token/refresh/`**
 - **Auth**: Not required
 - **Body**: `{ "refresh": "jwt_token" }`
 - **Response**: `{ "access": "new_jwt_token" }`
-- **Purpose**: Refresh expired access token
+- **Purpose**: Refresh expired access token (endpoint available but NOT integrated into frontend)
 
 ### Product Endpoints
 
 **GET `/api/products/`**
 - **Auth**: Required (Bearer token)
 - **Response**: `[ { "id": 1, "name": "T-Shirt", "price": "500.00", "description": "...", "image_url": "...", "template_image_url": "..." }, ... ]`
-- **Purpose**: Fetch all available products with pricing and template previews
+- **Purpose**: Fetch all available products with pricing and optional design template URLs
 
 ### Cart Endpoints
 
 **GET `/api/cart/`**
 - **Auth**: Required
 - **Response**: `[ { "id": 1, "product_name": "T-Shirt", "price": "500.00", "quantity": 2, "base_color": "White", "customization_text": "", "design_image_url": "data:image/..." }, ... ]`
-- **Purpose**: Get current user's cart items
+- **Purpose**: Get current authenticated user's cart items
+- **Note**: Returns items with `created_at` timestamp
 
 **POST `/api/cart/`**
 - **Auth**: Required
@@ -199,23 +202,24 @@ All endpoints prefixed with `/api/`. Authentication required unless noted.
     "price": 500.00,
     "quantity": 2,
     "base_color": "White",
-    "customization_text": "Custom Text Here",
+    "customization_text": "",
     "design_image_url": "data:image/png;base64,..."
   }
   ```
-- **Response**: Returns CartItem or merged result
-- **Behavior**: If identical item (same product, color, text, design) exists, quantity is incremented; otherwise creates new CartItem
+- **Response**: Returns CartItem (merged if identical item exists)
+- **Behavior**: If item exists with EXACT match on (product_name, base_color, customization_text, design_image_url), quantity increments; otherwise creates new CartItem
+- **Note**: `customization_text` field accepted but frontend NEVER sends non-empty values (always empty string)
 - **Purpose**: Add item to cart or merge into existing line
 
 **DELETE `/api/cart/{id}/`**
 - **Auth**: Required
 - **Response**: HTTP 204 No Content
-- **Purpose**: Remove specific cart item
+- **Purpose**: Delete specific cart item by ID
 
 **DELETE `/api/cart/clear/`**
 - **Auth**: Required
 - **Response**: `{ "message": "Cart cleared" }`
-- **Purpose**: Clear all cart items for user
+- **Purpose**: Clear all cart items for authenticated user
 
 ### Coupon Endpoints
 
@@ -223,8 +227,9 @@ All endpoints prefixed with `/api/`. Authentication required unless noted.
 - **Auth**: Required
 - **Body**: `{ "coupon_code": "SAVE10", "cart_total": 950.00 }`
 - **Response**: `{ "valid": true, "discount_percent": 10.0, "discount_amount": 95.00 }` or `{ "valid": false, "error": "Invalid coupon code." }`
-- **Purpose**: Preview discount without applying; `cart_total` should be subtotal AFTER bulk discount
-- **Validation**: Checks coupon active status, valid_from/valid_to dates
+- **Purpose**: Preview coupon discount without applying; `cart_total` must be subtotal AFTER bulk tiered discount
+- **Validation**: Case-insensitive code match; checks active status, valid_from ≤ now ≤ valid_to
+- **Usage**: Called from CartPage before final payment to show user discount preview
 
 ### Order Endpoints
 
@@ -257,19 +262,23 @@ All endpoints prefixed with `/api/`. Authentication required unless noted.
     }
   ]
   ```
-- **Purpose**: Fetch all orders for authenticated user with nested items and computed fields
+- **Serializer aliases**: `date` (from `created_at`), `total` (from `final_amount`), `discount` (from `discount_amount`), `coupon` (from `coupon_code`)
+- **Purpose**: Fetch all orders for authenticated user with nested OrderItems and computed pricing
 
 **POST `/api/orders/create_from_cart/`**
 - **Auth**: Required
 - **Body**: `{ "payment_intent_id": "pi_123456", "coupon_code": "SAVE10" }`
-- **Response**: Returns created Order with OrderItems
+- **Response**: Returns created Order with nested OrderItems
 - **Process**:
-  1. Applies tiered bulk discount (5% ≥ 5 qty, 10% ≥ 10 qty per line)
-  2. Applies coupon discount to subtotal after bulk
-  3. Creates Order with computed totals
-  4. Creates OrderItems with effective per-unit prices
-  5. Clears user's cart
-- **Purpose**: Finalize purchase after Stripe payment succeeds
+  1. Validates payment_intent_id via Stripe API (to verify successful payment)
+  2. Retrieves all CartItems for authenticated user
+  3. Calculates tiered bulk discount (5% if qty ≥ 5, 10% if qty ≥ 10 per line)
+  4. Applies coupon discount to subtotal_after_bulk (if valid & active)
+  5. Creates Order with totals: total_amount (raw), discount_amount (bulk + coupon), final_amount (charged)
+  6. Creates OrderItems with effective per-unit prices (after bulk discount)
+  7. Clears user's cart
+  8. Returns persisted Order data with 201 Created
+- **Purpose**: Finalize purchase after successful Stripe payment; called from Payment component's payment success callback
 
 ### Payment Endpoints
 
@@ -278,11 +287,13 @@ All endpoints prefixed with `/api/`. Authentication required unless noted.
 - **Body**: `{ "amount": 4050.00, "coupon_code": "SAVE10" }`
 - **Response**: `{ "clientSecret": "pi_123456_secret_...", "paymentIntentId": "pi_123456" }`
 - **Process**:
-  1. Creates Stripe PaymentIntent in PHP currency
-  2. Attaches metadata: user_id, username, coupon_code
-  3. Returns client secret for frontend confirmation
-- **Errors**: Returns 400 with error message if amount invalid or Stripe fails
-- **Purpose**: Initialize Stripe payment flow on backend; amount should be final_amount after all discounts
+  1. Converts PHP amount to cents (multiply by 100)
+  2. Creates Stripe PaymentIntent with `automatic_payment_methods` enabled
+  3. Attaches metadata: `user_id`, `username`, `coupon_code` for payment tracking & reconciliation
+  4. Returns client secret (for frontend confirmation) + payment_intent_id
+- **Errors**: Returns 400 with error description if amount ≤ 0 or Stripe API call fails
+- **Purpose**: Initialize Stripe payment flow on backend; called from CartPage Payment component before card processing
+- **Security**: Card details processed entirely by Stripe.js; never sent to backend (PCI-compliant)
 
 ---
 
@@ -290,15 +301,15 @@ All endpoints prefixed with `/api/`. Authentication required unless noted.
 
 **CustomKeeps** is a personalized keepsake e-commerce platform that lets users:
 
-1. **Browse & Select**: Explore customizable products (T-shirts, mugs, etc.) with pricing and design templates
-2. **Customize**: Upload custom design images, select colors, add text, specify quantities
-3. **Cart Management**: Add/remove items; system automatically merges duplicate orders and applies tiered bulk discounts
+1. **Browse & Select**: Explore customizable products (T-shirts, mugs, etc.) with pricing and optional design template images
+2. **Customize**: Upload custom design images (JPG/PNG), select base colors, specify quantities (1–100)
+3. **Cart Management**: Add/remove items; system auto-merges duplicate items and applies tiered bulk discounts
 4. **Discount Strategy**:
-   - **Tiered Bulk Discounts**: 5% off orders ≥5 units, 10% off ≥10 units (per line item)
+   - **Tiered Bulk Discounts**: 5% off per-line orders ≥5 units, 10% off ≥10 units (backend-calculated)
    - **Coupon Codes**: Time-bound percentage discounts applied on top of bulk discounts
-5. **Secure Payments**: Stripe PaymentIntent integration (card details never touch backend; PCI-compliant)
-6. **Order Tracking**: Users view order history with itemized breakdown, discounts, and payment status
-7. **Admin Management**: Staff manage products, view orders, update fulfillment status via Django Admin
+5. **Secure Payments**: Stripe PaymentIntent with card tokenization (PCI-compliant)
+6. **Order Tracking**: Users view complete order history with itemized breakdown, discount summary, and payment status
+7. **Admin Management**: Django admin interface for staff to manage products, view orders, update fulfillment status, and preview images
 
 **Revenue Model**: Per-unit pricing with bulk and coupon incentives; clear separation of raw cost, discounts, and final charged amount.
 
@@ -311,11 +322,11 @@ All endpoints prefixed with `/api/`. Authentication required unless noted.
 The exact flow ensures consistency across cart, payment, and persisted orders:
 
 1. **Raw Subtotal**: Sum of all `price × quantity` for each cart line
-2. **Tiered Bulk Discount** (per line):
+2. **Tiered Bulk Discount** (per line, backend-calculated):
    - If qty ≥ 10: discount line by 10%
    - Else if qty ≥ 5: discount line by 5%
    - Else: no discount
-   - Sum discounted lines → `subtotal_after_bulk`
+   - Sum all discounted lines → `subtotal_after_bulk`
 3. **Bulk Discount Amount**: `raw_subtotal - subtotal_after_bulk`
 4. **Coupon Discount** (if valid & active):
    - Applied to `subtotal_after_bulk`
@@ -333,130 +344,139 @@ The exact flow ensures consistency across cart, payment, and persisted orders:
 ## Data Model
 
 ### User
-- Standard Django User (username, email, password)
+- Standard Django User (username, email, password via createsuperuser or registration)
 
 ### Product
 - `name` (CharField, max 100)
-- `description` (TextField, blank)
-- `price` (DecimalField, max_digits=10)
-- `image_url` (URLField, optional)
-- `template_image_url` (URLField, optional—for design templates)
+- `description` (TextField, optional)
+- `price` (DecimalField, max_digits=10, decimal_places=2)
+- `image_url` (URLField, optional—product image displayed on frontend)
+- `template_image_url` (URLField, optional—design reference template shown in customization modal)
 
 ### CartItem
-- `user` (FK → User, cascade delete)
+- `user` (ForeignKey → User, cascade delete)
 - `product_name` (CharField, max 200)
 - `price` (DecimalField)
 - `quantity` (IntegerField, default 1)
 - `base_color` (CharField, max 50)
-- `customization_text` (TextField, optional)
-- `design_image_url` (TextField, base64 or URL)
+- `customization_text` (TextField, optional, blank=True—accepted in API but NEVER sent by frontend)
+- `design_image_url` (TextField—stores base64-encoded or URL-based user design image)
 - `created_at`, `updated_at` (auto timestamps)
 
 ### Order
-- `user` (FK → User)
-- `order_id` (CharField, unique, e.g., "ABC12345")
-- `total_amount` (DecimalField, raw subtotal)
-- `discount_amount` (DecimalField, bulk + coupon)
-- `final_amount` (DecimalField, charged amount)
-- `coupon_code` (CharField, optional)
+- `user` (ForeignKey → User)
+- `order_id` (CharField, unique, auto-generated UUID prefix, e.g., "ABC12345")
+- `total_amount` (DecimalField—raw subtotal BEFORE any discounts)
+- `discount_amount` (DecimalField—bulk + coupon combined)
+- `final_amount` (DecimalField—amount actually charged to customer)
+- `coupon_code` (CharField, optional—reference to applied coupon code)
 - `status` (CharField, choices: preparing, ready_for_delivery, in_transit, delivered, completed)
-- `payment_intent_id` (CharField, Stripe PaymentIntent ID)
+- `payment_intent_id` (CharField—Stripe PaymentIntent ID for reconciliation)
 - `created_at`, `updated_at` (auto timestamps)
 
 ### OrderItem (many-to-one with Order)
-- `order` (FK → Order, cascade delete)
+- `order` (ForeignKey → Order, cascade delete)
 - `product_name` (CharField, max 200)
-- `price` (DecimalField, effective per-unit after bulk discount)
+- `price` (DecimalField—effective per-unit price AFTER bulk discount applied)
 - `quantity` (IntegerField)
 - `base_color` (CharField)
-- `customization_text` (TextField, optional)
-- `design_image_url` (TextField)
+- `customization_text` (TextField, optional—copied from CartItem)
+- `design_image_url` (TextField—copied from CartItem)
 
 ### Coupon
-- `code` (CharField, unique, case-insensitive match)
-- `discount_percent` (DecimalField, e.g., 10.00 for 10%)
+- `code` (CharField, unique—case-insensitive lookup)
+- `discount_percent` (DecimalField, max_digits=5, decimal_places=2, e.g., 10.00 for 10%)
 - `valid_from` (DateTimeField)
 - `valid_to` (DateTimeField)
-- `active` (BooleanField)
+- `active` (BooleanField, default True)
 
 ---
 
 ## Frontend Features & User Flow
 
 ### Navigation
-- Fixed navbar with CustomKeeps logo
-- Links: Home, Cart, Orders, Logout
-- Responsive: Desktop (inline links) / Mobile (hamburger menu)
+- Fixed navbar with CustomKeeps logo and brand
+- Auth state: Show Home, Cart (with item count), Orders, Logout if authenticated; otherwise show Home only
+- Responsive: Desktop (inline nav links) / Mobile (hamburger menu with collapse)
 
 ### Home / Product Catalog
-- Displays all products as cards
-- Each card shows: image, name, price, description, "Customize" button
-- Clicking "Customize" opens modal with customization form
+- Displays all products as cards in grid layout
+- Each card shows: product image, name, description, price, and "Customize" button
+- Click "Customize" → opens modal with customization form
+- Hover effect: overlay with button re-labels to "Customize Now"
 
 ### Customization Modal
-- Shows design template preview (if available)
+- Shows product preview (image, name, price)
+- Displays design template preview (if available) as reference guide
 - Form fields:
-  - Quantity (1–100)
-  - Base color (select: White, Black, Navy Blue, Gray, Red, Pink, Yellow, Green)
-  - Design image upload (JPG/PNG, validated on client)
-  - Customization text (optional)
-- Buttons: "Add to Cart" (keeps shopping), "Buy Now" (checkout)
-- Form validation: Quantity range, image upload required
+  - **Quantity**: Input 1–100 (validated on client)
+  - **Base Color**: Dropdown (White, Black, Navy Blue, Gray, Red, Pink, Yellow, Green)
+  - **Design Image Upload**: File input (JPG/PNG only, required, validated client-side)
+  - **Customization Text**: Hidden/not rendered (backend accepts but frontend omits)
+- Buttons: "Add to Cart" (keeps shopping), "Buy Now" (proceeds to checkout)
+- Success message: "Added to cart!" (auto-hides after 2.5s)
 
 ### Cart Page
 - Lists all cart items with:
-  - Product image (user upload)
-  - Name, color, quantity, per-item price
-  - Subtotal per line
-  - Remove button
-- Summary section:
+  - Design image thumbnail (user upload)
+  - Product name, base color, quantity, per-item price, subtotal per line
+  - Remove button for each item
+  - Empty cart message if no items
+- **Summary section**:
   - Subtotal (before discounts)
-  - Bulk discount (calculated frontend, matches backend)
-  - Coupon code input + preview button
-  - Coupon discount (from API)
-  - **Total after discount** (displayed, sent to Stripe)
-- Payment section:
-  - Stripe Elements card input
-  - "Hold to Pay" button (prevents accidental submission)
-  - Processing/success status messages
+  - Bulk discount (calculated frontend and backend; frontend mirrors backend logic)
+  - Coupon code input + "Apply" button
+  - Coupon discount amount (from `/api/preview_coupon/`)
+  - **Final total after discount** (displayed; sent to Stripe)
+- **Payment section** (if items present):
+  - Stripe CardElement (secure card input)
+  - "Hold to Pay" button with progress bar (requires 1.5-second hold to prevent accidental clicks)
+  - Processing/success/error status messages
 - After successful payment: redirects to `/orders`
 
 ### Orders Page
-- Shows all user orders as cards
-- Per-order card displays:
-  - Order ID, status badge, date
-  - Itemized breakdown (image, name, color, qty, custom text)
-  - Summary:
-    - Subtotal (raw)
-    - Discount breakdown (bulk + coupon, if any)
-    - Total paid (final_amount)
+- Displays all user orders as cards in grid layout
+- Per-order card shows:
+  - Order ID, order status (plain text, no styling), date created
+  - Itemized breakdown: design image, product name, color, quantity, custom text
+  - Summary: subtotal (raw), total discount, total paid (final_amount)
+  - Coupon used (if applied)
+- Empty state message if no orders
 
 ### Responsive Design
-- Desktop: Full layout, inline navigation
-- Tablet: Adjusted spacing, touch-friendly buttons
-- Mobile: Hamburger menu, single-column layout, optimized forms
+- **Desktop** (> 900px): Full layout, inline navigation, multi-column grids
+- **Tablet** (600–900px): Adjusted spacing, touch-friendly buttons
+- **Mobile** (< 600px): Hamburger menu, single-column layout, stacked cart items, optimized modals
 
 ---
 
 ## Known Issues & Limitations
 
-### Current Limitations
+### Code-as-is Gaps (Current State)
 
-- **No drag-and-drop designer**: Users upload finished designs; no in-browser design tool
-- **Image handling**: No automatic compression or optimization; large images may slow uploads
-- **Single currency**: PHP only; multi-currency support not implemented
-- **Manual order updates**: Order status changes require Django Admin (no automated webhooks from fulfillment systems)
-- **Token storage**: JWT tokens stored in `localStorage` (acceptable for MVP; production should consider Secure + HTTPOnly cookies)
-- **Admin notifications**: No email notifications for order status changes; staff must manually update via Django Admin
-- **Payment retries**: Failed Stripe payments not automatically retried; user must resubmit
+1. **Customization Text Field**: Exists in backend API but NOT rendered in frontend form; always sent as empty string
+2. **Token Refresh Not Implemented**: Frontend does NOT call `/api/token/refresh/` endpoint; users must re-login after 24-hour access token expiration
+3. **No `fetchCurrentUser` Endpoint**: Function defined in `apiService.js` but `/api/user/` endpoint missing from backend
+4. **No Image Compression**: Large base64 images stored directly in database without client-side compression or server-side validation
+5. **Single Currency**: PHP only; no multi-currency support
+6. **Manual Order Updates**: Order status changes require Django Admin (no fulfillment system webhooks)
+7. **Token Storage**: JWT tokens stored in `localStorage` (acceptable for MVP; production should use Secure + HTTPOnly cookies)
+8. **No Automated Emails**: No email notifications for order status changes; staff must manually update via Django Admin
+9. **No Payment Retry Logic**: Failed Stripe payments must be manually resubmitted by user
+10. **Order Status Display**: Status shown as plain text in OrdersPage; no CSS styling or badge components
 
-### Potential Issues & Workarounds
+### Potential Runtime Issues & Workarounds
 
-- **CORS errors**: Verify `CORS_ALLOWED_ORIGINS` in Django settings matches frontend domain
-- **Image upload fails**: Check file size (<5MB recommended) and MIME type (JPG/PNG)
-- **Coupon not applying**: Ensure coupon is active, dates are valid, and exact code match (case-insensitive on backend)
-- **Stripe integration failure**: Verify API keys in `.env` are test/live keys, not swapped
-- **Cart merge not working**: Confirm all fields (product_name, base_color, customization_text, design_image_url) match exactly
+| Issue | Cause | Workaround |
+|-------|-------|-----------|
+| **Session timeout after 24 hours** | Access token expires; refresh endpoint not integrated | Re-login or implement automatic token refresh interceptor in apiService.js |
+| **CORS errors in deployment** | Frontend domain not in `CORS_ALLOWED_ORIGINS` | Verify Django settings match Vercel deployment URL |
+| **Image upload fails** | File size > 5MB or wrong MIME type; base64 encoding adds 33% overhead | Compress images client-side before upload; check browser console for upload errors |
+| **Coupon not applying** | Case mismatch or invalid dates | Ensure code matches exactly (case-insensitive on backend); verify coupon `active=True` and date range in Django Admin |
+| **Stripe integration fails** | Swapped test/live API keys | Verify `STRIPE_SECRET_KEY` and `STRIPE_PUBLISHABLE_KEY` in `.env` |
+| **Cart items not merging** | Field mismatch on base_color, customization_text, or design_image_url | Confirm all fields match exactly; design image URLs must be identical |
+| **"Hold to Pay" button stuck** | Requires full 1.5-second hold; timer resets on release | User must hold button continuously for 1.5 seconds without interruption |
+| **Customization text empty on orders** | Frontend never sends non-empty value | Field is design gap; frontend would need CustomizationForm text input |
 
 ---
 
@@ -472,43 +492,43 @@ The exact flow ensures consistency across cart, payment, and persisted orders:
 
 **Payment Integration**
 - ✅ Implemented Stripe PaymentIntent API (replaces Stripe.js basic flow)
-- ✅ Added "Hold to Pay" button to prevent accidental submissions
+- ✅ Added "Hold to Pay" button with visual progress bar to prevent accidental submissions
 - ✅ Server-side metadata attachment (user_id, username, coupon_code) for payment tracking
-- ✅ Proper separation: card details → Stripe, order data → backend
+- ✅ Proper separation: card details → Stripe via frontend, order data → backend only
 
 **Discount System**
-- ✅ Implemented tiered bulk pricing (5%/10% based on quantity per line)
-- ✅ Added coupon preview endpoint with real-time discount calculation
-- ✅ Ensured discount consistency across cart, payment, and persisted orders
-- ✅ Clear separation of raw_subtotal, bulk_discount, coupon_discount, final_amount
+- ✅ Implemented tiered bulk pricing (5% ≥5 qty, 10% ≥10 qty per line)
+- ✅ Added coupon preview endpoint with real-time discount calculation (`/api/preview_coupon/`)
+- ✅ Ensured discount consistency across cart (frontend), payment (backend), and persisted orders
+- ✅ Clear separation of raw_subtotal, bulk_discount, coupon_discount, final_amount in Order model
 
 **Database & Models**
 - ✅ Enhanced Order model with `total_amount`, `discount_amount`, `final_amount` fields
-- ✅ Added OrderItem model for itemized order history with effective pricing
+- ✅ Added OrderItem model for itemized order history with effective per-unit pricing
 - ✅ Coupon model with time-bound validity and active/inactive toggle
-- ✅ Product model with template_image_url for design previews
+- ✅ Product model with `template_image_url` for design reference templates
 
 **Frontend Features**
 - ✅ Cart now shows real-time discount calculations and coupon preview
-- ✅ Orders page displays full itemization with pricing breakdown
-- ✅ Responsive design with mobile hamburger menu
-- ✅ Enhanced error handling and user feedback messages
+- ✅ Orders page displays full itemization with pricing breakdown and order history
+- ✅ Responsive design with mobile hamburger menu and single-column layout
+- ✅ Enhanced error handling and user feedback messages throughout flows
 
 **Backend Optimization**
-- ✅ JWT auth with access (1 day) and refresh (7 days) tokens
-- ✅ Database query optimization using `prefetch_related` (~70% fewer hits)
+- ✅ JWT auth with access token (24 hours) and refresh token (7 days)
+- ✅ Database query optimization using `prefetch_related` (reduces query count ~70%)
 - ✅ CORS properly configured per deployment environment
 - ✅ Static file serving with WhiteNoise compression (40–60% size reduction)
 
-**Deployment**
-- ✅ Backend on Render with PostgreSQL
-- ✅ Frontend on Vercel with edge caching
-- ✅ Environment-specific configuration (dev/staging/prod)
+**Admin Interface**
+- ✅ Enhanced Django admin with image previews in CartItem, OrderItem, and OrderItem inline lists
+- ✅ Serializer aliases for cleaner API responses (`discount` → `discount_amount`, `total` → `final_amount`, etc.)
+- ✅ Comprehensive error handling in payment and coupon validation flows
 
-**Code Quality**
-- ✅ Admin interface enhanced with image previews in CartItem and OrderItem lists
-- ✅ Serializer aliases for cleaner API responses (e.g., `discount` for `discount_amount`)
-- ✅ Comprehensive error handling in payment and coupon flows
+**Deployment**
+- ✅ Backend on Render with PostgreSQL (production database)
+- ✅ Frontend on Vercel with edge caching and automatic CI/CD
+- ✅ Environment-specific configuration (dev/staging/prod)
 
 ---
 
@@ -518,27 +538,27 @@ The exact flow ensures consistency across cart, payment, and persisted orders:
 
 This project leveraged AI tools to accelerate development while maintaining code quality and technical accuracy. Specifically:
 
-- **API Architecture**: AI-assisted design of RESTful endpoints and serializer structure
-- **Stripe Integration**: AI guidance on PaymentIntent flow, metadata attachment, and error handling
-- **Discount Math**: AI help debugging tiered pricing logic and ensuring cart ↔ payment ↔ order consistency
-- **Frontend UX**: AI suggestions for form validation, error messages, and responsive layout patterns
-- **Deployment**: AI-guided Render/Vercel configuration and environment variable setup
+- **API Architecture**: AI-assisted design of RESTful endpoints, serializer structure, and error responses
+- **Stripe Integration**: AI guidance on PaymentIntent flow, metadata attachment, error handling, and client secret retrieval
+- **Discount Math**: AI help debugging tiered pricing logic and ensuring consistency across cart → payment → order persistence
+- **Frontend UX**: AI suggestions for form validation, error messages, responsive layout patterns, and modal interactions
+- **Deployment**: AI-guided Render/Vercel configuration, environment variable setup, and CI/CD pipeline
 
 **Important Notes:**
 - All AI-generated code was reviewed, tested, and integrated by the project team
-- No AI outputs were used for product images, customer-facing customization, or design assets
-- Business logic, discount calculations, and security measures were human-verified
-- AI was used as a tool to reduce boilerplate, not as a substitute for core development
+- No AI outputs were used for product images, customer-facing design, or content assets
+- Business logic (discount calculations, payment flow, order creation) was human-verified
+- AI was used as a tool to reduce boilerplate and accelerate scaffolding, not as a substitute for core development
 
 ---
 
 ## Team
 
 - **Ethan Aquino** – Backend architecture, payment integration, discount logic
-- **Arianna Chan** – Frontend design, UI/UX, responsive layout
+- **Arianna Chan** – Frontend design, UI/UX, responsive layout, modal interactions
 - **Paul Kim** – Cart system, order persistence, database design
-- **Harmonie Lin** – Deployment, DevOps, environment configuration
-- **Luis Quintos** – Testing, documentation, admin interface
+- **Harmonie Lin** – Deployment, DevOps, environment configuration, CI/CD
+- **Luis Quintos** – Testing, documentation, admin interface enhancements
 
 ---
 
@@ -551,8 +571,9 @@ This project leveraged AI tools to accelerate development while maintaining code
 cd customkeeps_backend
 python -m venv venv && source venv/bin/activate
 pip install -r requirements.txt
-echo "DJANGO_SECRET_KEY=dev" > .env
+echo "DJANGO_SECRET_KEY=dev-key" > .env
 python manage.py migrate
+python manage.py createsuperuser
 python manage.py runserver
 ```
 
@@ -561,6 +582,7 @@ python manage.py runserver
 cd customkeeps-frontend
 npm install
 echo "VITE_API_URL=http://localhost:8000" > .env.local
+echo "VITE_STRIPE_PUBLISHABLE_KEY=pk_test_..." >> .env.local
 npm run dev
 ```
 
@@ -568,6 +590,19 @@ Visit `http://localhost:5173` to start shopping!
 
 ---
 
-## License & Support
+## Future Improvements
 
-For questions or issues, contact the development team or open an issue in the repository.
+To address current limitations and enhance functionality:
+
+1. **Token Refresh Interceptor**: Implement fetch interceptor in `apiService.js` to automatically refresh access tokens before expiration
+2. **Enable Customization Text**: Render text input in `CustomizationForm` and pass non-empty values to API
+3. **Implement User Profile**: Add `/api/user/` endpoint in backend; call from frontend to display user info
+4. **Image Optimization**: Add client-side image compression before base64 encoding; add server-side size validation (max 5MB)
+5. **Order Status Styling**: Add CSS badge components with color-coding for order statuses
+6. **Webhook Integration**: Set up Stripe webhooks for automatic payment confirmation without relying on frontend redirect
+7. **Multi-currency Support**: Add currency conversion service; store prices with currency code
+8. **Email Notifications**: Integrate SendGrid or AWS SES for transactional order status update emails
+9. **Image Designer Tool**: Integrate Fabric.js or similar for in-browser design preview and editing
+10. **Rate Limiting**: Add DRF throttle classes to API endpoints to prevent abuse
+11. **Inventory Management**: Add stock levels to Product model; prevent overselling
+12. **Order Cancellation**: Allow users to cancel orders before fulfillment; refund via Stripe
