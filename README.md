@@ -413,8 +413,8 @@ The exact flow ensures consistency across cart, payment, and persisted orders:
   - **Base Color**: Dropdown (White, Black, Navy Blue, Gray, Red, Pink, Yellow, Green)
   - **Design Image Upload**: File input (JPG/PNG only, required, validated client-side)
   - **Customization Text**: Hidden/not rendered (backend accepts but frontend omits)
-- Buttons: "Add to Cart" (keeps shopping), "Buy Now" (proceeds to checkout)
-- Success message: "Added to cart!" (auto-hides after 2.5s)
+- Buttons: "Add to Cart" (keeps shopping), "Buy Now" (adds to cart and navigates to checkout)
+- Success message: "Added to cart!" (auto-hides after 2.0s)
 
 ### Cart Page
 - Lists all cart items with:
@@ -463,7 +463,6 @@ The exact flow ensures consistency across cart, payment, and persisted orders:
 7. **Token Storage**: JWT tokens stored in `localStorage` (acceptable for MVP; production should use Secure + HTTPOnly cookies)
 8. **No Automated Emails**: No email notifications for order status changes; staff must manually update via Django Admin
 9. **No Payment Retry Logic**: Failed Stripe payments must be manually resubmitted by user
-10. **Order Status Display**: Status shown as plain text in OrdersPage; no CSS styling or badge components
 
 ### Potential Runtime Issues & Workarounds
 
